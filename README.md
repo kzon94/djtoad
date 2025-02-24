@@ -45,7 +45,7 @@ DJ Toad es un bot de Discord diseñado para reproducir música en tu servidor. P
 1. Clona el repositorio:
 
    ```bash
-   git clone https://github.com/kzon94/djtoad.git
+   git clone https://github.com/kzon94/djtoad-public.git
    cd djtoad
    ```
 
