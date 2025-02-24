@@ -33,6 +33,7 @@ DJ Toad es un bot de Discord diseñado para reproducir música en tu servidor. P
 - `!pause`: Pausa la canción en reproducción.
 - `!resume`: Reanuda la canción pausada.
 - `!stop`: Detiene la música y desconecta al bot.
+- `!dance1`, `!dance2`: Saca a Toad a bailar!
 
 ## Requisitos
 
