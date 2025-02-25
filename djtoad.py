@@ -38,6 +38,7 @@ async def connect_to_voice(ctx):
     if not ctx.author.voice:
         await ctx.send("❌ Debes estar en un canal de voz. Croak!")
         return None
+
     voice_channel = ctx.author.voice.channel
     if ctx.voice_client is None:
         return await voice_channel.connect()
@@ -47,27 +48,43 @@ async def connect_to_voice(ctx):
 
 # Función para obtener la URL y el título de un video de YouTube
 async def fetch_audio_info(video_id):
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'quiet': True,
-    }
+    ydl_opts = {'format': 'bestaudio/best', 'quiet': True}
     url = f"https://www.youtube.com/watch?v={video_id}"
     try:
-        data = await asyncio.to_thread(youtube_dl.YoutubeDL(ydl_opts).extract_info, url, download=False)
+        data = await asyncio.to_thread(
+            youtube_dl.YoutubeDL(ydl_opts).extract_info,
+            url,
+            download=False
+        )
         return data['url'], data.get('title', 'Sin título')
     except Exception as e:
         return None, f"❌ Error obteniendo audio: {e}, croak!"
 
 # Función para reproducir la siguiente canción en la cola
-async def play_next_song(ctx):
+async def play_next_song(ctx, attempts=0):
+    MAX_ATTEMPTS = 3
+    if attempts >= MAX_ATTEMPTS:
+        await ctx.send("❌ No se pudo reproducir la siguiente canción. Croak!")
+        return
     if ctx.guild.id in queues and queues[ctx.guild.id]:
         video_id, title = queues[ctx.guild.id].pop(0)
         url, _ = await fetch_audio_info(video_id)
         if not url:
             await ctx.send(f"❌ Error al obtener el audio para {title}, croak!")
-            return await play_next_song(ctx)
+            return await play_next_song(ctx, attempts + 1)
+
         vc = ctx.voice_client
-        vc.play(discord.FFmpegPCMAudio(url), after=lambda e: asyncio.run_coroutine_threadsafe(play_next_song(ctx), bot.loop))
+
+        def after_playing(error):
+            fut = asyncio.run_coroutine_threadsafe(
+                play_next_song(ctx), bot.loop
+            )
+            try:
+                fut.result()
+            except Exception as e:
+                print(f"Error en after_playing: {e}")
+
+        vc.play(discord.FFmpegPCMAudio(url), after=after_playing)
         vc.source.title = title
         await ctx.send(f"🎶 Reproduciendo: {title}, croak!")
     else:
@@ -75,43 +92,63 @@ async def play_next_song(ctx):
         if ctx.voice_client:
             await ctx.voice_client.disconnect()
 
+# Comando '!play' para reproducir una canción
 @bot.command()
 async def play(ctx, *, song_name):
     vc = await connect_to_voice(ctx)
     if not vc:
         return
+
     await ctx.send(f"🔍 Buscando '{song_name}' y canciones recomendadas... Croak!")
+
     search_results = yt.search(song_name, filter='songs')
     if not search_results or 'videoId' not in search_results[0]:
         await ctx.send("❌ No se encontraron resultados, croak!")
         return
     song_id = search_results[0]['videoId']
+
     url, title = await fetch_audio_info(song_id)
     if not url:
         await ctx.send(title)
         return
+
     if vc.is_playing():
         vc.stop()
-    vc.play(discord.FFmpegPCMAudio(url), after=lambda e: asyncio.run_coroutine_threadsafe(play_next_song(ctx), bot.loop))
+
+    def after_playing(error):
+        fut = asyncio.run_coroutine_threadsafe(
+            play_next_song(ctx), bot.loop
+        )
+        try:
+            fut.result()
+        except Exception as e:
+            print(f"Error en after_playing: {e}")
+
+    vc.play(discord.FFmpegPCMAudio(url), after=after_playing)
     vc.source.title = title
     await ctx.send(f"🎶 Reproduciendo: {title}, croak!")
+
+    await ctx.send("⏳ Obteniendo canciones recomendadas... croak!")
     recommended_songs = get_song_list(song_id, exclude_song_id=song_id)
     queues[ctx.guild.id] = recommended_songs
+    await ctx.send("✅ Lista de reproducción descargada exitosamente. Croak!")
 
+# Comando '!dance1' para enviar un GIF de baile
 @bot.command()
 async def dance1(ctx):
-    """Envía un GIF de baile."""
     gif_url = "https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExNGQweHk5MmpidXJrZDJidzcwbGR6ZzFpZTE1ZzFuMGs3emtwOHFmaSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/pBDzxTAYdL6wRRdNTR/giphy.gif"
     await ctx.send(gif_url)
 
+# Comando '!dance2' para enviar otro GIF de baile
 @bot.command()
 async def dance2(ctx):
-    """Envía otro GIF de baile."""
     gif_url = "https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExaHBvc3h4ZmlqeWRhNmY1Y2wyaHFrY29jb3M1aDdpdjB6M3QzaWc3ciZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9cw/gmUM6ag84nFnwaumx8/giphy.gif"
     await ctx.send(gif_url)
 
+# Evento cuando el bot está listo
 @bot.event
 async def on_ready():
     print(f'✅ Tu rana favorita conectada como {bot.user}')
 
+# Ejecutar el bot
 bot.run(DISCORD_TOKEN)
